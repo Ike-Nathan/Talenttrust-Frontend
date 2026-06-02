@@ -177,4 +177,70 @@ describe('SettingsPanel', () => {
       expect(el.className).toMatch(/focus-visible/);
     });
   });
+
+  // --- Accessibility: dialog semantics ---
+
+  it('has role="dialog" when open', () => {
+    renderWithProvider(<SettingsPanel isOpen={true} onClose={() => {}} />);
+    expect(screen.getByRole('dialog')).toBeDefined();
+  });
+
+  it('has aria-modal="true" on the dialog', () => {
+    renderWithProvider(<SettingsPanel isOpen={true} onClose={() => {}} />);
+    expect(screen.getByRole('dialog').getAttribute('aria-modal')).toBe('true');
+  });
+
+  it('aria-labelledby points to the "Settings" heading', () => {
+    renderWithProvider(<SettingsPanel isOpen={true} onClose={() => {}} />);
+    const dialog = screen.getByRole('dialog');
+    const labelId = dialog.getAttribute('aria-labelledby');
+    expect(labelId).toBeTruthy();
+    const heading = document.getElementById(labelId!);
+    expect(heading).not.toBeNull();
+    expect(heading!.textContent).toBe('Settings');
+  });
+
+  // --- Accessibility: keyboard interactions ---
+
+  it('closes when Escape is pressed', () => {
+    const onClose = jest.fn();
+    renderWithProvider(<SettingsPanel isOpen={true} onClose={onClose} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('sets initial focus on the close button when opened', () => {
+    renderWithProvider(<SettingsPanel isOpen={true} onClose={() => {}} />);
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: /close settings/i })
+    );
+  });
+
+  it('Tab on the last focusable element wraps focus to the first', () => {
+    renderWithProvider(<SettingsPanel isOpen={true} onClose={() => {}} />);
+    const dialog = screen.getByRole('dialog');
+    const focusable = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+    );
+    const last = focusable[focusable.length - 1];
+    last.focus();
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: false });
+    expect(document.activeElement).toBe(focusable[0]);
+  });
+
+  it('Shift+Tab on the first focusable element wraps focus to the last', () => {
+    renderWithProvider(<SettingsPanel isOpen={true} onClose={() => {}} />);
+    const dialog = screen.getByRole('dialog');
+    const focusable = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+    );
+    const first = focusable[0];
+    first.focus();
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(focusable[focusable.length - 1]);
+  });
 });
