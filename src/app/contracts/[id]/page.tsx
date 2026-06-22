@@ -1,6 +1,3 @@
-'use client';
-
-import React from 'react';
 import Link from 'next/link';
 import ContractSummary from '@/components/ContractSummary';
 import MilestonesList, { Milestone } from '@/components/MilestonesList';
@@ -33,8 +30,12 @@ const sampleMilestones: Milestone[] = [
   },
 ];
 
-const ContractDetailPage = ({ params }: { params: Promise<{ id: string }> }) => {
-  const { id } = React.use(params);
+interface ContractDetailPageProps {
+  params: Promise<{ id: string }>;
+}
+
+const ContractDetailPage = async ({ params }: ContractDetailPageProps) => {
+  const { id } = await params;
   const status = 'Active' as const;
 
   const handleSubmitMilestone = () => {
