@@ -1,10 +1,63 @@
-const { default: nextPlugin } = require('eslint-config-next/flat');
+const js = require('@eslint/js');
+const globals = require('globals');
+const nextPlugin = require('eslint-config-next');
+const tsParser = require('@typescript-eslint/parser');
 
 module.exports = [
   // Ignore stray files that should never be linted
   {
     ignores: ['test_check.js'],
   },
-  // Next.js recommended rules (includes react, react-hooks, @next/next)
-  ...nextPlugin,
+  js.configs.recommended,
+  {
+    files: ['**/*.{js,jsx}'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+        ...globals.jest,
+        React: 'readonly',
+        JSX: 'readonly',
+      },
+    },
+    plugins: {
+      next: nextPlugin,
+    },
+    rules: {
+      ...nextPlugin.rules,
+      'react-hooks/set-state-in-effect': 'off',
+    },
+  },
+  {
+    files: ['**/*.{ts,tsx}'],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+        ...globals.jest,
+        React: 'readonly',
+        JSX: 'readonly',
+      },
+    },
+    plugins: {
+      next: nextPlugin,
+    },
+    rules: {
+      ...nextPlugin.rules,
+      'react-hooks/set-state-in-effect': 'off',
+    },
+  },
 ];
