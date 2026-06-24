@@ -41,7 +41,9 @@ describe('ToastProvider', () => {
   });
 
   afterEach(() => {
-    jest.clearAllTimers();
+    act(() => {
+      jest.clearAllTimers();
+    });
     jest.useRealTimers();
   });
 

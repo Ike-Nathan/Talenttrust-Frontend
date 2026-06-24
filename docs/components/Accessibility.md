@@ -164,6 +164,27 @@ Tests live in `src/components/__tests__/ErrorSummary.test.tsx` and cover:
 2. Call `await testA11y(<Component ... />)` for each state.
 3. If the component depends on a context provider, wrap it in the provider before passing to `testA11y`.
 
+## Single landmark rule (WCAG 2.4.1 Bypass Blocks)
+
+Per WCAG guidelines, a page should have exactly one `<main>` landmark to avoid confusing screen reader users with duplicate navigation targets. The root layout (`src/app/layout.tsx`) provides the single `<main id="main-content">` landmark, so page components must not render nested `<main>` elements.
+
+### Home page landmark fix (issue #148)
+
+The home sign-in form (`src/app/page.tsx`) previously had two accessibility issues:
+1. **Nested `<main>` landmark** - The page rendered its own `<main>` element while the layout already provided one, creating duplicate landmarks
+2. **Duplicate `<h1>` heading** - The page rendered an `<h1>` "TalentTrust" while the layout header already displayed the same text, breaking the heading hierarchy
+
+**Fix applied:**
+- Removed the nested `<main>` from `src/app/page.tsx` and replaced it with a `<div>` wrapper
+- Changed the page heading from `<h1>` to `<h2>` since the layout header provides the page title
+- Added a comment explaining the single-landmark rule for future maintainers
+
+**Test coverage:**
+- Added tests in `src/app/page.test.tsx` to verify exactly one `<main>` landmark exists
+- Added tests to verify no `<h1>` exists in the page component
+- Added comprehensive jest-axe coverage for empty, errored, and valid form states
+- Verified ErrorSummary focus and error anchor targeting work correctly
+
 ## Caveats
 
 - **jest-axe** runs in a JSDOM environment, which does not fully simulate visual rendering. Color-contrast violations are still detected because axe checks computed styles from JSDOM's CSS support.
