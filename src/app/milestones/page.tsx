@@ -1,58 +1,71 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import EmptyState from '../../components/EmptyState';
-import MilestoneFilter, { MilestoneStatusFilter } from '@/components/milestones/MilestoneFilter';
-import MilestonesList from '@/components/MilestonesList';
-import { listMilestones, saveMilestone } from '@/lib/repository';
+import MilestonesList from '../../components/MilestonesList';
+import MilestoneFilter, { type MilestoneStatusFilter } from '../../components/milestones/MilestoneFilter';
 import type { Milestone } from '@/types/domain';
 
+const SAMPLE_MILESTONES: Milestone[] = [
+  {
+    id: '1',
+    title: 'Project Kickoff & Discovery',
+    status: 'Completed',
+    payout: 2500,
+    currency: 'USD',
+    dueDate: '2026-03-15',
+  },
+  {
+    id: '2',
+    title: 'UI/UX Design Handoff',
+    status: 'Paid',
+    payout: 3500,
+    currency: 'USD',
+    dueDate: '2026-04-01',
+  },
+  {
+    id: '3',
+    title: 'Frontend Development – Sprint 1',
+    status: 'Pending',
+    payout: 5000,
+    currency: 'USD',
+    dueDate: '2026-05-01',
+  },
+  {
+    id: '4',
+    title: 'API Integration & Testing',
+    status: 'Pending',
+    payout: 4000,
+    currency: 'USD',
+    dueDate: '2026-05-15',
+  },
+  {
+    id: '5',
+    title: 'Payment Gateway Integration',
+    status: 'Disputed',
+    payout: 3000,
+    currency: 'USD',
+    dueDate: '2026-04-20',
+  },
+];
+
 const MilestonesPage: React.FC = () => {
-  // Initialise from localStorage on first render; saves trigger a state
-  // update so the list reflects newly added items immediately without refresh.
-  const [milestones, setMilestones] = useState<Milestone[]>(() => listMilestones());
   const [statusFilter, setStatusFilter] = useState<MilestoneStatusFilter>('All');
 
-  /** Derived list — filters the persisted array by the active status chip. */
-  const filtered = useMemo<Milestone[]>(() => {
-    if (statusFilter === 'All') return milestones;
-    return milestones.filter((m) => m.status === statusFilter);
-  }, [milestones, statusFilter]);
+  const filtered = useMemo(() => {
+    if (statusFilter === 'All') return SAMPLE_MILESTONES;
+    return SAMPLE_MILESTONES.filter((m) => m.status === statusFilter);
+  }, [statusFilter]);
 
-  /**
-   * Placeholder handler — wire up a form/modal here to collect milestone
-   * details, then call `saveMilestone` and refresh local state.
-   *
-   * Example (once a form is implemented):
-   *   const newMilestone = collectMilestoneFromForm();
-   *   saveMilestone(newMilestone);
-   *   setMilestones(listMilestones());
-   */
-  const handleAddMilestone = useCallback(() => {
-    // TODO: open a creation form/modal; replace stub data with real input.
-    const stub: Milestone = {
-      id: `ms-${Date.now()}`,
-      title: `New Milestone ${Date.now()}`,
-      status: 'Pending',
-      payout: 0,
-      currency: 'USD',
-      dueDate: new Date().toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      }),
-    };
-
-    saveMilestone(stub);
-    // Re-read storage so the component reflects the persisted state.
-    setMilestones(listMilestones());
-  }, []);
+  const handleAddMilestone = () => {
+    console.log('Add milestone');
+  };
 
   return (
     <main className="min-h-screen p-8">
       <h1 className="text-2xl font-bold mb-6">Milestones</h1>
 
-      {milestones.length === 0 ? (
+      {SAMPLE_MILESTONES.length === 0 ? (
         <EmptyState
           illustration="milestones"
           title="No milestones tracked"
@@ -67,7 +80,6 @@ const MilestonesPage: React.FC = () => {
             onChange={setStatusFilter}
             resultCount={filtered.length}
           />
-
           {filtered.length === 0 ? (
             <EmptyState
               illustration="milestones"
