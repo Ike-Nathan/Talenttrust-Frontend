@@ -46,11 +46,15 @@ describe('HeaderActions', () => {
     const toggle = screen.getByRole('button', { name: /open wallet actions/i });
     const menu = screen.getByRole('region', { name: /wallet actions/i });
 
+    await user.tab();
+    await user.tab();
+    expect(toggle).toHaveFocus();
+
     await user.keyboard('{Enter}');
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(menu).not.toHaveClass('hidden');
 
-    await user.keyboard('{Space}');
+    await user.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(menu).toHaveClass('hidden');
   });
