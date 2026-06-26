@@ -7,7 +7,7 @@ async function loadHeadersForEnv(nodeEnv: string) {
   process.env.NODE_ENV = nodeEnv;
   jest.resetModules();
 
-  const nextConfig = require('../../../../next.config');
+  const nextConfig = require('../../../next.config');
   return nextConfig.headers();
 }
 
