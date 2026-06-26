@@ -67,10 +67,10 @@ describe('CreateContractForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /create contract/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByRole('alert', { name: /there is a problem/i })).toBeInTheDocument();
     });
 
-    const summary = screen.getByRole('alert');
+    const summary = screen.getByRole('alert', { name: /there is a problem/i });
     expect(summary).toHaveTextContent(/contract name is required/i);
     expect(summary).toHaveTextContent(/freelancer address is required/i);
     expect(summary).toHaveTextContent(/total value must be a positive number/i);
@@ -94,7 +94,7 @@ describe('CreateContractForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /create contract/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent(
+      expect(screen.getByRole('alert', { name: /there is a problem/i })).toHaveTextContent(
         /must be a valid stellar g\.\.\. address/i
       );
     });
@@ -117,7 +117,7 @@ describe('CreateContractForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /create contract/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent(
+      expect(screen.getByRole('alert', { name: /there is a problem/i })).toHaveTextContent(
         /total value must be a positive number/i
       );
     });
@@ -140,7 +140,7 @@ describe('CreateContractForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /create contract/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent(
+      expect(screen.getByRole('alert', { name: /there is a problem/i })).toHaveTextContent(
         /total value must be a positive number/i
       );
     });
@@ -186,7 +186,7 @@ describe('CreateContractForm', () => {
 
     expect(onSuccess).toHaveBeenCalledTimes(1);
     // No error summary should be visible.
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert', { name: /there is a problem/i })).not.toBeInTheDocument();
   });
 
   it('passes the correctly shaped Contract to onSuccess', async () => {
@@ -227,7 +227,7 @@ describe('CreateContractForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /create contract/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByRole('alert', { name: /there is a problem/i })).toBeInTheDocument();
     });
 
     const links = screen.getAllByRole('link');
