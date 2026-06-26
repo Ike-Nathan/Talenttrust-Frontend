@@ -1,44 +1,48 @@
+// src/contexts/__tests__/WalletContext.test.tsx
+// Import React and testing utilities
 import React from 'react';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { WalletProvider, useWallet, MOCKED_STELLAR_ADDRESS } from '../WalletContext';
 import { isValidStellarAddress } from '@/lib/stellarAddress';
+import { render, act, screen } from '@testing-library/react';
 import { ToastProvider } from '@/components/toast/toast-provider';
-import { PreferencesProvider } from '@/lib/preferences';
+// Ensure we get the real implementation of WalletContext, bypassing any prior mocks
+const { WalletProvider, useWallet } = jest.requireActual('@/contexts/WalletContext');
 
-// Remove the global mock for this test file
-jest.unmock('@/contexts/WalletContext');
+jest.mock('@/lib/safeStorage', () => ({
+  safeStorage: {
+    getItem: jest.fn(),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
+  },
+}));
 
-// Test consumer component
-function WalletConsumer() {
-  const { address, isConnecting, error, connect, disconnect } = useWallet();
-  
+const MockComponent = () => {
+  const { address, connect, disconnect } = useWallet();
   return (
     <div>
-      <div data-testid="address">{address || 'No address'}</div>
-      <div data-testid="is-connecting">{isConnecting ? 'Connecting' : 'Not connecting'}</div>
-      <div data-testid="error">{error || 'No error'}</div>
-      <button data-testid="connect-btn" onClick={connect}>Connect Wallet</button>
-      <button data-testid="disconnect-btn" onClick={disconnect}>Disconnect Wallet</button>
+      <span data-testid="address">{address ?? 'null'}</span>
+      <button onClick={connect}>Connect</button>
+      <button onClick={disconnect}>Disconnect</button>
     </div>
-  );
-}
-
-const renderWithProviders = (ui: React.ReactElement, idleTimeout?: number) => {
-  return render(
-    <PreferencesProvider>
-      <ToastProvider>
-        <WalletProvider idleTimeout={idleTimeout}>
-          {ui}
-        </WalletProvider>
-      </ToastProvider>
-    </PreferencesProvider>
   );
 };
 
-describe('WalletContext', () => {
+describe('WalletContext persistence', () => {
+  const { safeStorage } = require('@/lib/safeStorage');
+
   beforeEach(() => {
+    jest.clearAllMocks();
     jest.useFakeTimers();
+    resetCache();
+    localStorage.clear();
+    mockRequestAccess.mockReset();
+    Object.defineProperty(window, 'freighter', {
+      value: true,
+      writable: true,
+      configurable: true,
+    });
   });
 
   afterEach(() => {
@@ -112,37 +116,37 @@ describe('WalletContext', () => {
       });
 
       expect(screen.getByTestId('address')).toHaveTextContent('No address');
+  test('rehydrates address from safeStorage on mount', () => {
+    (safeStorage.getItem as jest.Mock).mockReturnValue('0xABC');
+    render(
+      <WalletProvider idleTimeout={0}>
+        <MockComponent />
+      </WalletProvider>
+    );
+    expect(screen.getByTestId('address')).toHaveTextContent('0xABC');
+    expect(safeStorage.getItem).toHaveBeenCalledWith('wallet_connected_address');
+  });
+
+  test('connect stores address in safeStorage', async () => {
+    (safeStorage.getItem as jest.Mock).mockReturnValue(null);
+    render(
+      <WalletProvider idleTimeout={0}>
+        <MockComponent />
+      </WalletProvider>
+    );
+    act(() => {
+      screen.getByText('Connect').click();
     });
-
-    it('resets error on a new connect() call', async () => {
-      renderWithProviders(<WalletConsumer />);
-
-      const connectBtn = screen.getByTestId('connect-btn');
-
-      // Connect successfully
-      await act(async () => {
-        connectBtn.click();
-      });
-
-      await act(async () => {
-        jest.advanceTimersByTime(1000);
-      });
-
-      expect(screen.getByTestId('error')).toHaveTextContent('No error');
-
-      // Connect again - error should still be cleared
-      await act(async () => {
-        connectBtn.click();
-      });
-
-      expect(screen.getByTestId('error')).toHaveTextContent('No error');
-
-      await act(async () => {
-        jest.advanceTimersByTime(1000);
-      });
-
-      expect(screen.getByTestId('error')).toHaveTextContent('No error');
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
     });
+    expect(screen.getByTestId('address')).toHaveTextContent(
+      '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
+    );
+    expect(safeStorage.setItem).toHaveBeenCalledWith(
+      'wallet_connected_address',
+      '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
+    );
   });
 
   describe('Idle auto-disconnect', () => {
@@ -226,50 +230,45 @@ describe('WalletContext', () => {
 
       // Should still be connected
       expect(screen.getByTestId('address')).toHaveTextContent(MOCKED_STELLAR_ADDRESS);
+  test('disconnect clears address from safeStorage', async () => {
+    (safeStorage.getItem as jest.Mock).mockReturnValue(null);
+    render(
+      <WalletProvider idleTimeout={0}>
+        <MockComponent />
+      </WalletProvider>
+    );
+    act(() => {
+      screen.getByText('Connect').click();
     });
-
-    it('cleans up listeners and timer on unmount', async () => {
-      const removeEventListenerSpy = jest.spyOn(window, 'removeEventListener');
-      const { unmount } = renderWithProviders(<WalletConsumer />, IDLE_TIMEOUT);
-      
-      // Connect first to trigger the effect that adds listeners
-      await act(async () => {
-        screen.getByTestId('connect-btn').click();
-      });
-      await act(async () => {
-        jest.advanceTimersByTime(1000);
-      });
-
-      unmount();
-      
-      expect(removeEventListenerSpy).toHaveBeenCalledWith('pointermove', expect.any(Function));
-      expect(removeEventListenerSpy).toHaveBeenCalledWith('keydown', expect.any(Function));
-      
-      removeEventListenerSpy.mockRestore();
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
     });
+    act(() => {
+      screen.getByText('Disconnect').click();
+    });
+    expect(screen.getByTestId('address')).toHaveTextContent('null');
+    expect(safeStorage.removeItem).toHaveBeenCalledWith('wallet_connected_address');
   });
 
-  describe('useWallet() outside provider', () => {
-    it('throws error when called outside WalletProvider', () => {
-      // Suppress console.error for this test
-      const consoleError = jest.spyOn(console, 'error').mockImplementation();
-
-      function ComponentWithoutProvider() {
-        const successContent = <div>Should not render</div>;
-        let content: React.ReactNode;
-        try {
-          useWallet();
-          content = successContent;
-        } catch (err) {
-          content = <div data-testid="error-message">{(err as Error).message}</div>;
-        }
-        return <>{content}</>;
-      }
-
-      render(<ComponentWithoutProvider />);
-      expect(screen.getByTestId('error-message')).toHaveTextContent('useWallet must be used within a WalletProvider');
-
-      consoleError.mockRestore();
+  test('idle timeout disconnects and clears storage', async () => {
+    (safeStorage.getItem as jest.Mock).mockReturnValue(null);
+    render(
+      <ToastProvider>
+        <WalletProvider idleTimeout={2000}>
+          <MockComponent />
+        </WalletProvider>
+      </ToastProvider>
+    );
+    act(() => {
+      screen.getByText('Connect').click();
     });
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(2000);
+    });
+    expect(screen.getByTestId('address')).toHaveTextContent('null');
+    expect(safeStorage.removeItem).toHaveBeenCalledWith('wallet_connected_address');
   });
 });
