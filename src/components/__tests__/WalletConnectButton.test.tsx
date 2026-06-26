@@ -2,14 +2,10 @@ import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { WalletConnectButton } from '../WalletConnectButton';
-import { WalletContextType, useWallet } from '@/contexts/WalletContext';
+import type { WalletContextType } from '@/contexts/WalletContext';
+import * as WalletContext from '@/contexts/WalletContext';
 
-// Mock the context hook
-jest.mock('@/contexts/WalletContext', () => ({
-  useWallet: jest.fn(),
-}));
-
-const mockUseWallet = useWallet as jest.MockedFunction<typeof useWallet>;
+const mockUseWallet = WalletContext.useWallet as jest.MockedFunction<typeof WalletContext.useWallet>;
 
 describe('WalletConnectButton', () => {
   beforeEach(() => {
