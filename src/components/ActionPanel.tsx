@@ -26,39 +26,48 @@ export type ActionPanelDisabledReasons = {
  * Props for the ActionPanel component.
  */
 export type ActionPanelProps = {
-  /** 
-   * Current lifecycle status of the contract
-   * This drives which actions are visible and their order (mapped via `getActionButtons`).
+  /**
+   * Current lifecycle status of the contract.
+   * Drives which actions are visible and their order (mapped via `getActionButtons`).
    */
   status: 'Active' | 'Completed' | 'Disputed' | 'Pending';
   /** Callback triggered when the user initiates a milestone submission. */
   onSubmitMilestone?: () => void;
-  /** Callback triggered when the user initiates a dispute. */
-  onDispute?: () => void;
+  /**
+   * Callback triggered when the user confirms a dispute with a reason.
+   * Receives the trimmed, non-empty reason string (max 500 chars).
+   */
+  onDispute?: (reason: string) => void;
   /** Callback triggered when the user releases funds to the freelancer. */
   onReleaseFunds?: () => void;
   /** Callback triggered to view the summary of a completed contract. */
   onViewSummary?: () => void;
-  /** 
-   * Disables every visible action button globally and maps their `aria-describedby` 
-   * to a shared loading reason (`action-panel-loading-reason`). Use this while 
-   * fetching contract or wallet state. 
+  /**
+   * Disables every visible action button globally and maps their `aria-describedby`
+   * to a shared loading reason (`action-panel-loading-reason`). Use this while
+   * fetching contract or wallet state.
    */
   isLoading?: boolean;
-  /** 
-   * Render a `role="alert"` region above the actions to announce transient 
-   * errors (like network failures) to assistive technologies. 
+  /**
+   * Render a `role="alert"` region above the actions to announce transient
+   * errors (like network failures) to assistive technologies.
    */
   errorMessage?: string;
-  /** 
-   * Per-action accessible reason for why a specific button is disabled. 
-   * This is useful for wallet-gating, unmet conditions, or missing permissions.
+  /**
+   * Per-action accessible reason for why a specific button is disabled.
+   * Useful for wallet-gating, unmet conditions, or missing permissions.
    */
   disabledReasons?: ActionPanelDisabledReasons;
 };
 
 const LOADING_REASON = 'Action is disabled while contract data is loading.';
 const LOADING_DESCRIPTION_ID = 'action-panel-loading-reason';
+
+/** Maximum character length for a dispute reason. */
+const DISPUTE_REASON_MAX_LENGTH = 500;
+
+const DISPUTE_REASON_ERROR_ID = 'dispute-reason-error';
+const DISPUTE_REASON_HINT_ID = 'dispute-reason-hint';
 
 const getActionButtons = (status: ActionPanelProps['status']) => {
   if (status === 'Active') return ['Submit Milestone', 'Release Funds', 'Dispute'];
@@ -67,10 +76,9 @@ const getActionButtons = (status: ActionPanelProps['status']) => {
   return ['View Summary'];
 };
 
-type ConfirmAction = 'submit' | 'release' | 'dispute' | null;
+type ConfirmAction = 'submit' | 'release' | null;
 
 const CONFIRM_COPY = {
-  // Submit milestone is confirmation-gated to match other escrow-changing actions.
   submit: {
     title: 'Confirm Submit Milestone',
     description: 'Are you sure you want to submit this milestone for approval? This action cannot be undone.',
@@ -80,11 +88,6 @@ const CONFIRM_COPY = {
     title: 'Confirm Release Funds',
     description: 'Are you sure you want to release funds? This action cannot be undone.',
     confirmLabel: 'Release Funds',
-  },
-  dispute: {
-    title: 'Confirm Dispute',
-    description: 'Are you sure you want to open a dispute? This action cannot be undone.',
-    confirmLabel: 'Dispute',
   },
 } as const;
 
@@ -113,19 +116,13 @@ const ActionPanel = ({
   const focusRingClass =
     'focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-blue-500';
 
-  // Confirmation dialog state tracks the currently gated escrow action.
+  // ── Submit / Release confirmation dialog state ───────────────────────────
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
-  const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
-  const previousConfirmActionRef = useRef<'release' | 'dispute' | null>(null);
 
   /**
-   * Holds a reference to the button that opened the confirmation dialog.
-   *
-   * Captured via `event.currentTarget` inside `handleOpenConfirm` — not via a
-   * static `ref` prop on each button — so it always points to the exact element
-   * the user activated, regardless of how many confirmation-gated buttons are
-   * rendered. After the dialog closes (confirm or cancel) focus is restored to
-   * this element, satisfying WCAG 2.1 SC 3.2.2 and the APG dialog pattern.
+   * Holds a reference to the button that opened the confirmation dialog or the
+   * dispute form. After closing, focus is restored here to satisfy WCAG 2.1
+   * SC 3.2.2 and the APG dialog pattern.
    */
   const triggerElementRef = useRef<HTMLButtonElement | null>(null);
 
@@ -140,40 +137,103 @@ const ActionPanel = ({
   const handleConfirm = () => {
     if (confirmAction === 'submit') {
       onSubmitMilestone?.();
-      showSuccess({
-        title: 'Milestone submitted',
-      });
+      showSuccess({ title: 'Milestone submitted' });
     } else if (confirmAction === 'release') {
       onReleaseFunds?.();
-    } else if (confirmAction === 'dispute') {
-      onDispute?.();
     }
     setConfirmAction(null);
-    // Restore focus to the button that triggered the dialog.
     triggerElementRef.current?.focus();
   };
 
   const handleCancel = () => {
     setConfirmAction(null);
-    // Restore focus to the button that triggered the dialog.
     triggerElementRef.current?.focus();
   };
 
+  // ── Inline dispute form state ────────────────────────────────────────────
+  const [disputeFormOpen, setDisputeFormOpen] = useState(false);
+  const [disputeReason, setDisputeReason] = useState('');
+  const [disputeReasonError, setDisputeReasonError] = useState('');
+  const disputeTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const disputeTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  /** Opens the inline dispute form and moves focus to the textarea. */
+  const handleOpenDisputeForm = (event: React.MouseEvent<HTMLButtonElement>) => {
+    disputeTriggerRef.current = event.currentTarget;
+    triggerElementRef.current = event.currentTarget;
+    setDisputeReason('');
+    setDisputeReasonError('');
+    setDisputeFormOpen(true);
+  };
+
+  // Move focus into the textarea when the form becomes visible.
   useEffect(() => {
-    const wasDialogOpen = previousConfirmActionRef.current !== null;
+    if (disputeFormOpen) {
+      disputeTextareaRef.current?.focus();
+    }
+  }, [disputeFormOpen]);
 
-    if (wasDialogOpen && confirmAction === null) {
-      const triggerButton = triggerButtonRef.current;
+  /** Closes the inline form and returns focus to the button that opened it. */
+  const closeDisputeForm = () => {
+    setDisputeFormOpen(false);
+    setDisputeReason('');
+    setDisputeReasonError('');
+    // Defer so the button is re-enabled in the DOM before focus is applied.
+    requestAnimationFrame(() => {
+      disputeTriggerRef.current?.focus();
+    });
+  };
 
-      if (triggerButton && document.contains(triggerButton) && !triggerButton.disabled) {
-        triggerButton.focus();
-      } else {
-        panelRef.current?.focus();
-      }
+  const handleDisputeReasonChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    // Enforce hard max-length in the handler as a safety net in addition to
+    // the maxLength attribute; silently truncate to avoid confusing the user
+    // mid-keystroke (the character counter below communicates the limit).
+    if (value.length <= DISPUTE_REASON_MAX_LENGTH) {
+      setDisputeReason(value);
+    }
+    // Clear the validation error as soon as the user starts correcting input.
+    if (disputeReasonError && value.trim().length > 0) {
+      setDisputeReasonError('');
+    }
+  };
+
+  /**
+   * Validates and submits the dispute reason.
+   *
+   * Validation rules:
+   *   1. Must not be empty / whitespace-only.
+   *   2. Trimmed length must not exceed DISPUTE_REASON_MAX_LENGTH.
+   *
+   * On success the trimmed reason is forwarded to `onDispute` and the form
+   * is closed; focus returns to the originating "Dispute" button.
+   */
+  const handleDisputeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = disputeReason.trim();
+
+    if (trimmed.length === 0) {
+      setDisputeReasonError('Please provide a reason for the dispute.');
+      disputeTextareaRef.current?.focus();
+      return;
     }
 
-    previousConfirmActionRef.current = confirmAction;
-  }, [confirmAction]);
+    // Trimmed length is guaranteed ≤ DISPUTE_REASON_MAX_LENGTH because the
+    // textarea hard-caps raw input; this check is a belt-and-suspenders guard.
+    if (trimmed.length > DISPUTE_REASON_MAX_LENGTH) {
+      setDisputeReasonError(
+        `Reason must be ${DISPUTE_REASON_MAX_LENGTH} characters or fewer.`,
+      );
+      disputeTextareaRef.current?.focus();
+      return;
+    }
+
+    onDispute?.(trimmed);
+    closeDisputeForm();
+  };
+
+  const remainingChars = DISPUTE_REASON_MAX_LENGTH - disputeReason.length;
+  const isOverLimit = remainingChars < 0;
 
   return (
     <aside
@@ -242,7 +302,7 @@ const ActionPanel = ({
         {actions.includes('Release Funds') && (
           <button
             type="button"
-            onClick={(event) => handleOpenConfirm('release', event.currentTarget)}
+            onClick={(e) => handleOpenConfirm('release', e)}
             disabled={!isWalletConnected || isLoading || !!disabledReasons?.releaseFunds}
             title={!isWalletConnected ? noWalletMsg : undefined}
             aria-label="Release funds to the contractor"
@@ -254,17 +314,125 @@ const ActionPanel = ({
         )}
 
         {actions.includes('Dispute') && (
-          <button
-            type="button"
-            onClick={(event) => handleOpenConfirm('dispute', event.currentTarget)}
-            disabled={!isWalletConnected || isLoading || !!disabledReasons?.dispute}
-            title={!isWalletConnected ? noWalletMsg : undefined}
-            aria-label="Open a dispute for this contract"
-            aria-describedby={describedBy(describedById('dispute'))}
-            className={`w-full rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed ${focusRingClass}`}
-          >
-            Dispute
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={handleOpenDisputeForm}
+              disabled={
+                !isWalletConnected ||
+                isLoading ||
+                !!disabledReasons?.dispute ||
+                disputeFormOpen
+              }
+              title={!isWalletConnected ? noWalletMsg : undefined}
+              aria-label="Open a dispute for this contract"
+              aria-expanded={disputeFormOpen}
+              aria-controls={disputeFormOpen ? 'dispute-reason-form' : undefined}
+              aria-describedby={describedBy(describedById('dispute'))}
+              className={`w-full rounded-2xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed ${focusRingClass}`}
+            >
+              Dispute
+            </button>
+
+            {/* Inline dispute reason form — rendered below the trigger button,
+                visible only when the user clicks "Dispute". The form is not a
+                modal so the rest of the page remains accessible. */}
+            {disputeFormOpen && (
+              <div
+                id="dispute-reason-form"
+                role="group"
+                aria-labelledby="dispute-form-heading"
+                className="rounded-2xl border border-rose-200 bg-rose-50 p-4 space-y-3"
+              >
+                <p
+                  id="dispute-form-heading"
+                  className="text-sm font-semibold text-rose-900"
+                >
+                  Describe the reason for this dispute
+                </p>
+
+                {/* Screen-reader hint linked via aria-describedby */}
+                <span id={DISPUTE_REASON_HINT_ID} className="sr-only">
+                  Enter a reason between 1 and {DISPUTE_REASON_MAX_LENGTH} characters.
+                  This cannot be undone.
+                </span>
+
+                <form onSubmit={handleDisputeSubmit} noValidate>
+                  <label
+                    htmlFor="dispute-reason-textarea"
+                    className="block text-xs font-medium text-rose-800 mb-1"
+                  >
+                    Reason{' '}
+                    <span aria-hidden="true" className="text-rose-600">
+                      *
+                    </span>
+                  </label>
+
+                  <textarea
+                    ref={disputeTextareaRef}
+                    id="dispute-reason-textarea"
+                    name="disputeReason"
+                    rows={4}
+                    maxLength={DISPUTE_REASON_MAX_LENGTH}
+                    value={disputeReason}
+                    onChange={handleDisputeReasonChange}
+                    aria-required="true"
+                    aria-describedby={
+                      disputeReasonError
+                        ? `${DISPUTE_REASON_ERROR_ID} ${DISPUTE_REASON_HINT_ID}`
+                        : DISPUTE_REASON_HINT_ID
+                    }
+                    aria-invalid={disputeReasonError ? 'true' : undefined}
+                    placeholder="Explain why you are opening this dispute…"
+                    className={`w-full resize-y rounded-xl border px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500 ${
+                      disputeReasonError
+                        ? 'border-rose-500 bg-white'
+                        : 'border-slate-300 bg-white'
+                    }`}
+                  />
+
+                  {/* Live character counter — aria-live so screen readers
+                      announce the remaining count as the user types. */}
+                  <p
+                    aria-live="polite"
+                    aria-atomic="true"
+                    className={`mt-1 text-xs text-right ${
+                      isOverLimit ? 'text-rose-600 font-semibold' : 'text-slate-500'
+                    }`}
+                  >
+                    {remainingChars} / {DISPUTE_REASON_MAX_LENGTH} characters remaining
+                  </p>
+
+                  {/* Validation error — linked to the textarea via aria-describedby */}
+                  {disputeReasonError && (
+                    <p
+                      id={DISPUTE_REASON_ERROR_ID}
+                      role="alert"
+                      className="mt-1 text-xs font-medium text-rose-700"
+                    >
+                      {disputeReasonError}
+                    </p>
+                  )}
+
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      type="submit"
+                      className={`flex-1 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed ${focusRingClass}`}
+                    >
+                      Confirm Dispute
+                    </button>
+                    <button
+                      type="button"
+                      onClick={closeDisputeForm}
+                      className={`flex-1 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition hover:border-slate-400 ${focusRingClass}`}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </>
         )}
 
         {actions.includes('View Summary') && (
@@ -281,7 +449,8 @@ const ActionPanel = ({
         )}
       </div>
 
-      {/* Confirmation Dialog */}
+      {/* Confirmation Dialog — used for Submit Milestone and Release Funds only.
+          Dispute is handled by the inline form above. */}
       <ConfirmDialog
         isOpen={confirmAction !== null}
         title={confirmAction ? CONFIRM_COPY[confirmAction].title : ''}

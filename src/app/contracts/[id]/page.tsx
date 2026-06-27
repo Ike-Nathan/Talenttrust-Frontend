@@ -157,14 +157,25 @@ const ContractDetailPageContent = ({ id }: { id: string }) => {
 
   /**
    * Persists the confirmed dispute action as a disputed contract.
+   *
+   * Receives the validated, trimmed reason string from ActionPanel's inline
+   * form. The reason is passed to the success toast description so it is
+   * surfaced to the user without any raw HTML rendering.
+   *
+   * @param reason - Non-empty trimmed dispute reason (max 500 chars).
    */
-  const handleDispute = useCallback(() => {
-    persistContractStatus(
-      'Disputed',
-      'Dispute opened',
-      'The contract was marked as Disputed and the change was saved.',
-    );
-  }, [persistContractStatus]);
+  const handleDispute = useCallback(
+    (reason: string) => {
+      persistContractStatus(
+        'Disputed',
+        'Dispute opened',
+        // reason has already been trimmed and validated by ActionPanel;
+        // it is rendered as text content only — never via dangerouslySetInnerHTML.
+        `The contract was marked as Disputed. Reason: ${reason}`,
+      );
+    },
+    [persistContractStatus],
+  );
 
   const handleViewSummary = () => {
     // Replace with summary navigation.
@@ -210,21 +221,6 @@ const ContractDetailPageContent = ({ id }: { id: string }) => {
               {isLoading ? (
                 <ContractProgressSkeleton />
               ) : contractData ? (
-                /**
-                 * getMilestonesForContract – extracts the milestones that belong
-                 * to a resolved contract.
-                 *
-                 * ContractData already carries its own `milestones` array (populated
-                 * by resolveContractData), so no extra repository call is needed.
-                 * The helper is inlined here for readability but could be extracted to
-                 * a shared utility if more pages need the same slice.
-                 *
-                 * Currency is intentionally NOT hardcoded; each Milestone already
-                 * carries its own `currency` field that matches the contract.
-                 *
-                 * @param data - The fully resolved ContractData object.
-                 * @returns The milestone array for that contract, or [] if absent.
-                 */
                 <ContractProgress milestones={contractData.milestones} />
               ) : null}
             </SafeBoundary>
