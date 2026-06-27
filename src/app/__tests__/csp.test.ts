@@ -18,10 +18,12 @@ function getHeaderMap(headers: HeaderEntry[]) {
 describe("Content Security Policy", () => {
   const originalEnv = process.env.NODE_ENV;
 
+
   afterAll(() => {
     process.env.NODE_ENV = originalEnv;
     jest.resetModules();
   });
+
 
   test('development includes unsafe-eval and unsafe-inline', async () => {
     const result = await loadHeadersForEnv('development');

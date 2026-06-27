@@ -18,20 +18,21 @@ type CurrencyFormatOptions = Intl.NumberFormatOptions & {
 function safeCurrencyFormat(
   amount: number,
   currency: string,
-  options: CurrencyFormatOptions = {}
+  locale: string = 'en-US',
+  options: Intl.NumberFormatOptions = {}
 ): string {
   const defaultCurrency = 'USD';
   const { locale = 'en-US', ...formatOptions } = options;
 
   try {
     return new Intl.NumberFormat(locale, {
-      ...formatOptions,
+      ...options,
       style: 'currency',
       currency,
     }).format(amount);
-  } catch {
+  } catch (_e) {
     return new Intl.NumberFormat(locale, {
-      ...formatOptions,
+      ...options,
       style: 'currency',
       currency: defaultCurrency,
     }).format(amount);
@@ -129,15 +130,12 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     const locale = amountFormat === 'ngn' ? 'en-NG' : 'en-US';
 
     if (amountFormat === 'compact') {
-      return safeCurrencyFormat(amount, activeCurrency, {
-        locale: 'en-US',
+      return safeCurrencyFormat(amount, activeCurrency, 'en-US', {
         notation: 'compact',
       });
     }
 
-    return safeCurrencyFormat(amount, activeCurrency, {
-      locale,
-    });
+    return safeCurrencyFormat(amount, activeCurrency, locale);
   };
 
   return (
@@ -155,7 +153,7 @@ export function usePreferences() {
       preferences: DEFAULT_PREFERENCES,
       updatePreference: () => {},
       formatAmount: (amount: number, currency: string = 'USD') => 
-        safeCurrencyFormat(amount, currency, { locale: 'en-US' }),
+        safeCurrencyFormat(amount, currency, 'en-US'),
     };
   }
   return context;

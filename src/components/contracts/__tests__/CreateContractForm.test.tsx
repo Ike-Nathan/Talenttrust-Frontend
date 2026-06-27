@@ -22,8 +22,8 @@ jest.mock('@/lib/repository', () => ({
 }));
 
 jest.mock('@/lib/stellarAddress', () => ({
-  isValidStellarAddress: jest.fn((addr: string) => typeof addr === 'string' && addr.length === 56 && addr.startsWith('G')),
-  normalizeStellarAddress: jest.fn((addr: string) => (typeof addr === 'string' ? addr.trim().toUpperCase() : '')),
+  isValidStellarAddress: jest.fn((addr: string) => addr.length === 56 && addr.startsWith('G')),
+  normalizeStellarAddress: jest.fn((addr: string) => addr.trim()),
 }));
 
 // ---------------------------------------------------------------------------

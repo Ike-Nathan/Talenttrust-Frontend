@@ -2,8 +2,8 @@
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
 import { useToast } from '@/components/toast/toast-provider';
+import * as safeStorage from '@/lib/safeStorage';
 import { requestAccess } from '@stellar/freighter-api';
-import { getItem, setItem, removeItem } from '@/lib/safeStorage';
 
 export type WalletContextType = {
   address: string | null;
@@ -54,7 +54,7 @@ export function WalletProvider({
 
   // Rehydrate saved address from localStorage on mount
   useEffect(() => {
-    const saved = getItem(STORAGE_KEY);
+    const saved = safeStorage.getItem(STORAGE_KEY);
     if (saved) {
       setAddress(saved);
     }
@@ -147,7 +147,7 @@ export function WalletProvider({
       }
 
       setAddress(result.address);
-      setItem(STORAGE_KEY, result.address);
+      safeStorage.setItem(STORAGE_KEY, result.address);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to connect wallet';
 
