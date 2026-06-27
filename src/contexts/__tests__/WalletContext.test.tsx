@@ -7,11 +7,19 @@ import { ToastProvider } from '@/components/toast/toast-provider';
 const { WalletProvider, useWallet } = jest.requireActual('@/contexts/WalletContext');
 
 jest.mock('@/lib/safeStorage', () => ({
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+  resetCache: jest.fn(),
   safeStorage: {
     getItem: jest.fn(),
     setItem: jest.fn(),
     removeItem: jest.fn(),
   },
+}));
+
+jest.mock('@stellar/freighter-api', () => ({
+  requestAccess: jest.fn(),
 }));
 
 const MockComponent = () => {
@@ -25,15 +33,20 @@ const MockComponent = () => {
   );
 };
 
-describe('WalletContext persistence', () => {
-  const { safeStorage } = require('@/lib/safeStorage');
+const { getItem, setItem, removeItem, resetCache } = require('@/lib/safeStorage');
+const { requestAccess } = require('@stellar/freighter-api');
 
+describe('WalletContext persistence', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     resetCache();
     localStorage.clear();
-    mockRequestAccess.mockReset();
+    (requestAccess as jest.Mock).mockReset();
+    (requestAccess as jest.Mock).mockResolvedValue({
+      address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
+      error: null,
+    });
     Object.defineProperty(window, 'freighter', {
       value: true,
       writable: true,
@@ -49,18 +62,18 @@ describe('WalletContext persistence', () => {
   });
 
   test('rehydrates address from safeStorage on mount', () => {
-    (safeStorage.getItem as jest.Mock).mockReturnValue('0xABC');
+    (getItem as jest.Mock).mockReturnValue('0xABC');
     render(
       <WalletProvider idleTimeout={0}>
         <MockComponent />
       </WalletProvider>
     );
     expect(screen.getByTestId('address')).toHaveTextContent('0xABC');
-    expect(safeStorage.getItem).toHaveBeenCalledWith('wallet_connected_address');
+    expect(getItem).toHaveBeenCalledWith('wallet_connected_address');
   });
 
   test('connect stores address in safeStorage', async () => {
-    (safeStorage.getItem as jest.Mock).mockReturnValue(null);
+    (getItem as jest.Mock).mockReturnValue(null);
     render(
       <WalletProvider idleTimeout={0}>
         <MockComponent />
@@ -75,14 +88,14 @@ describe('WalletContext persistence', () => {
     expect(screen.getByTestId('address')).toHaveTextContent(
       '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
     );
-    expect(safeStorage.setItem).toHaveBeenCalledWith(
+    expect(setItem).toHaveBeenCalledWith(
       'wallet_connected_address',
       '0x71C7656EC7ab88b098defB751B7401B5f6d8976F'
     );
   });
 
   test('disconnect clears address from safeStorage', async () => {
-    (safeStorage.getItem as jest.Mock).mockReturnValue(null);
+    (getItem as jest.Mock).mockReturnValue(null);
     render(
       <WalletProvider idleTimeout={0}>
         <MockComponent />
@@ -98,11 +111,11 @@ describe('WalletContext persistence', () => {
       screen.getByText('Disconnect').click();
     });
     expect(screen.getByTestId('address')).toHaveTextContent('null');
-    expect(safeStorage.removeItem).toHaveBeenCalledWith('wallet_connected_address');
+    expect(removeItem).toHaveBeenCalledWith('wallet_connected_address');
   });
 
   test('idle timeout disconnects and clears storage', async () => {
-    (safeStorage.getItem as jest.Mock).mockReturnValue(null);
+    (getItem as jest.Mock).mockReturnValue(null);
     render(
       <ToastProvider>
         <WalletProvider idleTimeout={2000}>
@@ -120,6 +133,6 @@ describe('WalletContext persistence', () => {
       jest.advanceTimersByTime(2000);
     });
     expect(screen.getByTestId('address')).toHaveTextContent('null');
-    expect(safeStorage.removeItem).toHaveBeenCalledWith('wallet_connected_address');
+    expect(removeItem).toHaveBeenCalledWith('wallet_connected_address');
   });
 });

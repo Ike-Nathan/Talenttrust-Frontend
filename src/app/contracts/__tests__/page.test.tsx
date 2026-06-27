@@ -1,12 +1,24 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import ContractsPage from '../page';
 import * as repository from '@/lib/repository';
+import { STORAGE_KEY } from '@/lib/repository';
 import * as stellarAddress from '@/lib/stellarAddress';
 
+const actualRepository = jest.requireActual('@/lib/repository');
+
 // Mock dependencies
-jest.mock('@/lib/repository');
+jest.mock('@/lib/repository', () => {
+  const actual = jest.requireActual('@/lib/repository');
+
+  return {
+    ...actual,
+    listContracts: jest.fn(actual.listContracts),
+    saveContract: jest.fn(actual.saveContract),
+  };
+});
 jest.mock('@/lib/stellarAddress');
 
 const mockListContracts = repository.listContracts as jest.MockedFunction<
@@ -25,7 +37,8 @@ describe('ContractsPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
-    mockListContracts.mockReturnValue([]);
+    mockListContracts.mockImplementation(actualRepository.listContracts);
+    mockSaveContract.mockImplementation(actualRepository.saveContract);
     mockIsValidStellarAddress.mockImplementation((addr: string) => addr === VALID_ADDRESS);
   });
 
@@ -149,7 +162,7 @@ describe('ContractsPage', () => {
       fireEvent.click(screen.getByRole('button', { name: /create contract/i }));
 
       // Try to submit empty form
-      fireEvent.click(screen.getAllByRole('button', { name: /create contract/i })[1]);
+      fireEvent.click(screen.getByRole('button', { name: /create contract/i }));
 
       await waitFor(() => {
         expect(screen.getByRole('alert', { name: /there is a problem/i })).toBeInTheDocument();
@@ -183,12 +196,13 @@ describe('ContractsPage', () => {
       fireEvent.change(partyAddresses[1], { target: { value: VALID_ADDRESS } });
 
       // Submit form
-      fireEvent.click(screen.getAllByRole('button', { name: /create contract/i })[1]);
+      fireEvent.click(screen.getByRole('button', { name: /create contract/i }));
 
       await waitFor(() => {
-        expect(screen.getByText(/party 1 address must be a valid stellar address/i)).toBeInTheDocument();
+        expect(screen.getByRole('alert', { name: /there is a problem/i })).toHaveTextContent(
+          /party 1 address must be a valid stellar address/i
+        );
       });
-
       expect(mockSaveContract).not.toHaveBeenCalled();
     });
   });
@@ -232,13 +246,13 @@ describe('ContractsPage', () => {
         totalValue: 7500,
         currency: 'EUR',
         status: 'Pending' as const,
-        createdAt: expect.any(String),
+        createdAt: 'Jan 1, 2025',
         milestoneCount: 0,
       };
       mockListContracts.mockReturnValue([newContract]);
 
       // Submit form
-      fireEvent.click(screen.getAllByRole('button', { name: /create contract/i })[1]);
+      fireEvent.click(screen.getByRole('button', { name: /create contract/i }));
 
       await waitFor(() => {
         expect(mockSaveContract).toHaveBeenCalledTimes(1);
@@ -305,7 +319,7 @@ describe('ContractsPage', () => {
       ]);
 
       // Submit form
-      fireEvent.click(screen.getAllByRole('button', { name: /create contract/i })[1]);
+      fireEvent.click(screen.getByRole('button', { name: /create contract/i }));
 
       await waitFor(() => {
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -355,7 +369,7 @@ describe('ContractsPage', () => {
       };
       mockListContracts.mockReturnValue([createdContract]);
 
-      fireEvent.click(screen.getAllByRole('button', { name: /create contract/i })[1]);
+      fireEvent.click(screen.getByRole('button', { name: /create contract/i }));
 
       await waitFor(() => {
         expect(screen.getByText('My First Contract')).toBeInTheDocument();
@@ -386,10 +400,10 @@ describe('ContractsPage', () => {
       fireEvent.change(partyLabels[0], { target: { value: 'Client' } });
       fireEvent.change(partyAddresses[0], { target: { value: VALID_ADDRESS } });
 
-      fireEvent.click(screen.getAllByRole('button', { name: /create contract/i })[1]);
+      fireEvent.click(screen.getByRole('button', { name: /create contract/i }));
 
       await waitFor(() => {
-        expect(screen.getByText(/at least two parties are required/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/at least two parties are required/i).length).toBeGreaterThanOrEqual(1);
       });
     });
   });
@@ -399,7 +413,7 @@ describe('ContractsPage', () => {
       mockListContracts.mockReturnValue([]);
       render(<ContractsPage />);
 
-      expect(screen.getByRole('heading', { name: /contracts/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /^contracts$/i })).toBeInTheDocument();
     });
 
     it('renders main landmark', () => {
@@ -442,6 +456,21 @@ describe('ContractsPage', () => {
     render(<ContractsPage />);
 
     await user.click(screen.getByRole('button', { name: 'Create Contract' }));
+
+    // Fill in the new contract form and submit it
+    await user.type(screen.getByLabelText(/contract name/i), 'Contract 1700000000000');
+    await user.type(screen.getByLabelText(/total value/i), '1000');
+    await user.selectOptions(screen.getByLabelText(/currency/i), 'USD');
+
+    const partyLabels = screen.getAllByPlaceholderText(/e\.g\., client, freelancer/i);
+    const partyAddresses = screen.getAllByPlaceholderText(/GXXXXXXXXXX/i);
+
+    await user.type(partyLabels[0], 'Client');
+    await user.type(partyAddresses[0], VALID_ADDRESS);
+    await user.type(partyLabels[1], 'Freelancer');
+    await user.type(partyAddresses[1], VALID_ADDRESS);
+
+    await user.click(screen.getByRole('button', { name: /create contract/i }));
 
     const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}');
     expect(stored.contracts).toHaveLength(1);
