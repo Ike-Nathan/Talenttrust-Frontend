@@ -114,9 +114,23 @@ const ActionPanel = ({
 
   // Confirmation dialog state tracks the currently gated escrow action.
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
-  const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const handleOpenConfirm = (action: Exclude<ConfirmAction, null>) => {
+  /**
+   * Holds a reference to the button that opened the confirmation dialog.
+   *
+   * Captured via `event.currentTarget` inside `handleOpenConfirm` — not via a
+   * static `ref` prop on each button — so it always points to the exact element
+   * the user activated, regardless of how many confirmation-gated buttons are
+   * rendered. After the dialog closes (confirm or cancel) focus is restored to
+   * this element, satisfying WCAG 2.1 SC 3.2.2 and the APG dialog pattern.
+   */
+  const triggerElementRef = useRef<HTMLButtonElement | null>(null);
+
+  const handleOpenConfirm = (
+    action: Exclude<ConfirmAction, null>,
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => {
+    triggerElementRef.current = event.currentTarget;
     setConfirmAction(action);
   };
 
@@ -132,10 +146,14 @@ const ActionPanel = ({
       onDispute?.();
     }
     setConfirmAction(null);
+    // Restore focus to the button that triggered the dialog.
+    triggerElementRef.current?.focus();
   };
 
   const handleCancel = () => {
     setConfirmAction(null);
+    // Restore focus to the button that triggered the dialog.
+    triggerElementRef.current?.focus();
   };
 
   return (
@@ -189,7 +207,7 @@ const ActionPanel = ({
         {actions.includes('Submit Milestone') && (
           <button
             type="button"
-            onClick={() => handleOpenConfirm('submit')}
+            onClick={(e) => handleOpenConfirm('submit', e)}
             disabled={!isWalletConnected || isLoading || !!disabledReasons?.submitMilestone}
             title={!isWalletConnected ? noWalletMsg : undefined}
             aria-label="Submit milestone for approval"
@@ -203,8 +221,7 @@ const ActionPanel = ({
         {actions.includes('Release Funds') && (
           <button
             type="button"
-            ref={el => { triggerButtonRef.current = el; }}
-            onClick={() => handleOpenConfirm('release')}
+            onClick={(e) => handleOpenConfirm('release', e)}
             disabled={!isWalletConnected || isLoading || !!disabledReasons?.releaseFunds}
             title={!isWalletConnected ? noWalletMsg : undefined}
             aria-label="Release funds to the contractor"
@@ -218,8 +235,7 @@ const ActionPanel = ({
         {actions.includes('Dispute') && (
           <button
             type="button"
-            ref={el => { triggerButtonRef.current = el; }}
-            onClick={() => handleOpenConfirm('dispute')}
+            onClick={(e) => handleOpenConfirm('dispute', e)}
             disabled={!isWalletConnected || isLoading || !!disabledReasons?.dispute}
             title={!isWalletConnected ? noWalletMsg : undefined}
             aria-label="Open a dispute for this contract"

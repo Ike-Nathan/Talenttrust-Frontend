@@ -238,3 +238,194 @@ describe('ActionPanel', () => {
     expect(onViewSummary).toHaveBeenCalledTimes(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Focus restoration after dialog close
+// ---------------------------------------------------------------------------
+
+describe('focus restoration after dialog close', () => {
+  it('returns focus to Release Funds after cancel', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ActionPanel
+        status="Active"
+        onReleaseFunds={jest.fn()}
+        onDispute={jest.fn()}
+        onSubmitMilestone={jest.fn()}
+      />
+    );
+
+    const releaseFundsBtn = screen.getByRole('button', { name: /release funds to the contractor/i });
+
+    await user.click(releaseFundsBtn);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /cancel/i }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(releaseFundsBtn).toHaveFocus();
+  });
+
+  it('returns focus to Dispute after cancel', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ActionPanel
+        status="Active"
+        onReleaseFunds={jest.fn()}
+        onDispute={jest.fn()}
+        onSubmitMilestone={jest.fn()}
+      />
+    );
+
+    const disputeBtn = screen.getByRole('button', { name: /open a dispute/i });
+
+    await user.click(disputeBtn);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /cancel/i }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(disputeBtn).toHaveFocus();
+  });
+
+  it('returns focus to Release Funds after confirm', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ActionPanel
+        status="Active"
+        onReleaseFunds={jest.fn()}
+        onDispute={jest.fn()}
+        onSubmitMilestone={jest.fn()}
+      />
+    );
+
+    const releaseFundsBtn = screen.getByRole('button', { name: /release funds to the contractor/i });
+
+    await user.click(releaseFundsBtn);
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /release funds/i }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(releaseFundsBtn).toHaveFocus();
+  });
+
+  it('returns focus to Dispute after confirm', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ActionPanel
+        status="Active"
+        onReleaseFunds={jest.fn()}
+        onDispute={jest.fn()}
+        onSubmitMilestone={jest.fn()}
+      />
+    );
+
+    const disputeBtn = screen.getByRole('button', { name: /open a dispute/i });
+
+    await user.click(disputeBtn);
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^dispute$/i }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(disputeBtn).toHaveFocus();
+  });
+
+  it('returns focus to Submit Milestone after confirm', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ActionPanel
+        status="Active"
+        onSubmitMilestone={jest.fn()}
+        onReleaseFunds={jest.fn()}
+        onDispute={jest.fn()}
+      />
+    );
+
+    const submitBtn = screen.getByRole('button', { name: /submit milestone for approval/i });
+
+    await user.click(submitBtn);
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /submit milestone/i }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(submitBtn).toHaveFocus();
+  });
+
+  it('returns focus to Submit Milestone after cancel', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ActionPanel
+        status="Active"
+        onSubmitMilestone={jest.fn()}
+        onReleaseFunds={jest.fn()}
+        onDispute={jest.fn()}
+      />
+    );
+
+    const submitBtn = screen.getByRole('button', { name: /submit milestone for approval/i });
+
+    await user.click(submitBtn);
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /cancel/i }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(submitBtn).toHaveFocus();
+  });
+
+  it('correctly distinguishes Release Funds from Dispute — each restores to its own button', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ActionPanel
+        status="Active"
+        onReleaseFunds={jest.fn()}
+        onDispute={jest.fn()}
+        onSubmitMilestone={jest.fn()}
+      />
+    );
+
+    const releaseFundsBtn = screen.getByRole('button', { name: /release funds to the contractor/i });
+    const disputeBtn = screen.getByRole('button', { name: /open a dispute/i });
+
+    // Open from Release Funds, cancel → focus back to Release Funds (not Dispute)
+    await user.click(releaseFundsBtn);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /cancel/i }));
+    expect(releaseFundsBtn).toHaveFocus();
+    expect(disputeBtn).not.toHaveFocus();
+
+    // Open from Dispute, cancel → focus back to Dispute (not Release Funds)
+    await user.click(disputeBtn);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /cancel/i }));
+    expect(disputeBtn).toHaveFocus();
+    expect(releaseFundsBtn).not.toHaveFocus();
+  });
+
+  it('returns focus to Dispute button on Escape key close', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ActionPanel
+        status="Disputed"
+        onDispute={jest.fn()}
+      />
+    );
+
+    const disputeBtn = screen.getByRole('button', { name: /open a dispute/i });
+
+    await user.click(disputeBtn);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(disputeBtn).toHaveFocus();
+  });
+});

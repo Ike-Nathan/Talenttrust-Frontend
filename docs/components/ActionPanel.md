@@ -34,7 +34,27 @@ The `ActionPanel` manages accessibility heavily through `aria-describedby` for d
 - Loading states disable all visible actions and describe that contract data is still loading.
 - Error states are announced through `role="alert"` without moving focus or changing the action order.
 
-## Status Mapping
+## Focus Restoration
+
+When a confirmation-gated action (Submit Milestone, Release Funds, Dispute) opens the `ConfirmDialog`, focus moves into the dialog per the ARIA dialog pattern. When the dialog closes — by confirming, cancelling, or pressing Escape — focus is restored to the button that originally opened it.
+
+**Implementation detail:** `handleOpenConfirm` captures `event.currentTarget` into a `triggerElementRef` at the moment the button is clicked. Both `handleConfirm` and `handleCancel` call `triggerElementRef.current?.focus()` after clearing the dialog state. This is intentionally done via event capture rather than static `ref` props on each button, which would cause the last-rendered button to always win when multiple confirmation-gated buttons are visible at the same time (e.g. Release Funds and Dispute on `Active`/`Pending` status).
+
+```
+User clicks "Release Funds"
+  → handleOpenConfirm('release', event)
+  → triggerElementRef.current = event.currentTarget  ← captured here
+  → dialog opens, focus moves to Cancel button
+
+User clicks Cancel (or presses Escape)
+  → handleCancel()
+  → setConfirmAction(null)       ← dialog unmounts
+  → triggerElementRef.current?.focus()  ← focus back to Release Funds ✓
+```
+
+This satisfies WCAG 2.1 SC 3.2.2 (On Input) and the WAI-ARIA Authoring Practices Guide dialog pattern requirement that focus returns to the triggering element after dialog dismissal.
+
+
 
 | Status | Visible actions |
 |--------|-----------------|
@@ -81,3 +101,4 @@ The component tests cover:
 - Visible focus ring classes on every enabled action.
 - Disabled action semantics and screen-reader descriptions.
 - Loading, slow-network error, and missing-handler edge cases.
+- **Focus restoration:** After cancel, confirm, or Escape on each confirmation-gated action, focus lands on the exact button that opened the dialog — asserting Release Funds and Dispute are correctly distinguished even when both are rendered simultaneously.
