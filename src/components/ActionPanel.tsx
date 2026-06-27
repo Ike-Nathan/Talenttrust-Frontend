@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useWallet } from '@/contexts/WalletContext';
 import { useToast } from '@/components/toast/toast-provider';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -103,6 +103,7 @@ const ActionPanel = ({
   const { showSuccess } = useToast();
   const isWalletConnected = !!address;
   const noWalletMsg = 'Connect wallet to perform this action';
+  const panelRef = useRef<HTMLElement | null>(null);
 
   const describedBy = (perActionId: string | undefined) =>
     isLoading ? LOADING_DESCRIPTION_ID : perActionId;
@@ -114,6 +115,8 @@ const ActionPanel = ({
 
   // Confirmation dialog state tracks the currently gated escrow action.
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
+  const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previousConfirmActionRef = useRef<'release' | 'dispute' | null>(null);
 
   /**
    * Holds a reference to the button that opened the confirmation dialog.
@@ -156,8 +159,26 @@ const ActionPanel = ({
     triggerElementRef.current?.focus();
   };
 
+  useEffect(() => {
+    const wasDialogOpen = previousConfirmActionRef.current !== null;
+
+    if (wasDialogOpen && confirmAction === null) {
+      const triggerButton = triggerButtonRef.current;
+
+      if (triggerButton && document.contains(triggerButton) && !triggerButton.disabled) {
+        triggerButton.focus();
+      } else {
+        panelRef.current?.focus();
+      }
+    }
+
+    previousConfirmActionRef.current = confirmAction;
+  }, [confirmAction]);
+
   return (
     <aside
+      ref={panelRef}
+      tabIndex={-1}
       aria-labelledby="action-panel-heading"
       className="sticky top-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
     >
@@ -221,7 +242,7 @@ const ActionPanel = ({
         {actions.includes('Release Funds') && (
           <button
             type="button"
-            onClick={(e) => handleOpenConfirm('release', e)}
+            onClick={(event) => handleOpenConfirm('release', event.currentTarget)}
             disabled={!isWalletConnected || isLoading || !!disabledReasons?.releaseFunds}
             title={!isWalletConnected ? noWalletMsg : undefined}
             aria-label="Release funds to the contractor"
@@ -235,7 +256,7 @@ const ActionPanel = ({
         {actions.includes('Dispute') && (
           <button
             type="button"
-            onClick={(e) => handleOpenConfirm('dispute', e)}
+            onClick={(event) => handleOpenConfirm('dispute', event.currentTarget)}
             disabled={!isWalletConnected || isLoading || !!disabledReasons?.dispute}
             title={!isWalletConnected ? noWalletMsg : undefined}
             aria-label="Open a dispute for this contract"

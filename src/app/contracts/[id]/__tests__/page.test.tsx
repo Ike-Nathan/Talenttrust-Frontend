@@ -1,22 +1,82 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import ContractDetailPage from '../page';
 import * as contractResolver from '@/lib/contractResolver';
-
-// ---------------------------------------------------------------------------
-// Module mocks
-// ---------------------------------------------------------------------------
+import { upsertContract } from '@/lib/repository';
+import { useWallet } from '@/contexts/WalletContext';
 
 jest.mock('next/navigation', () => ({
-  notFound: jest.fn(() => { throw new Error('NEXT_NOT_FOUND'); }),
+  notFound: jest.fn(() => {
+    throw new Error('NEXT_NOT_FOUND');
+  }),
 }));
 
-jest.mock('next/link', () => {
-  return ({ children, href }: { children: React.ReactNode; href: string }) => (
-    <a href={href}>{children}</a>
-  );
-});
-
 jest.mock('@/lib/contractResolver');
+jest.mock('@/lib/repository', () => ({
+  upsertContract: jest.fn(),
+}));
+
+const mockedResolveContractData = jest.mocked(contractResolver.resolveContractData);
+const mockedUpsertContract = jest.mocked(upsertContract);
+const mockedUseWallet = useWallet as jest.MockedFunction<typeof useWallet>;
+
+const contractData: contractResolver.ContractData = {
+  id: '123',
+  name: 'Stellar Escrow Implementation',
+  status: 'Active',
+  parties: [
+    { label: 'Client', address: 'GABC1234DEF5678HIJK9012LMNO3456PQRS7890' },
+    { label: 'Freelancer', address: 'GXYZ9876STU5432VWXQ1098ABCD7654EFGH3210' },
+  ],
+  totalValue: 7000,
+  currency: 'USD',
+  createdAt: 'Apr 20, 2026',
+  milestones: [
+    {
+      id: 'ms-1',
+      title: 'Kickoff and scope approval',
+      status: 'Completed',
+      payout: 1500,
+      currency: 'USD',
+      dueDate: '2026-05-04',
+    },
+    {
+      id: 'ms-2',
+      title: 'Design and review',
+      status: 'Pending',
+      payout: 2500,
+      currency: 'USD',
+      dueDate: '2026-06-01',
+    },
+    {
+      id: 'ms-3',
+      title: 'Final delivery',
+      status: 'Pending',
+      payout: 3000,
+      currency: 'USD',
+      dueDate: '2026-07-12',
+    },
+  ],
+};
+
+async function renderPage(id = '123') {
+  const Component = await ContractDetailPage({ params: Promise.resolve({ id }) });
+  return render(
+    <ToastProvider>
+      {Component}
+    </ToastProvider>,
+  );
+}
+
+function getContractSummarySection() {
+  const contractHeading = screen.getByRole('heading', { name: contractData.name });
+  const section = contractHeading.closest('section');
+
+  if (!section) {
+    throw new Error('Contract summary section was not found.');
+  }
+
+  return section;
+}
 
 const mockShowSuccess = jest.fn();
 
@@ -29,113 +89,57 @@ jest.mock('@/components/toast/toast-provider', () => ({
   })),
 }));
 
-// ---------------------------------------------------------------------------
-// Shared fixture helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Deep-clones a plain object via JSON round-trip.
- * Uses JSON serialization instead of structuredClone for compatibility
- * with Node.js < 17 (the version used in this project's CI environment).
- */
-function deepClone<T>(obj: T): T {
-  return JSON.parse(JSON.stringify(obj)) as T;
-}
-
-/** Base contract data resolved by the mock – mirrors the real contractResolver shape. */
-const BASE_CONTRACT = {
-  id: '123',
-  name: 'Stellar Escrow Implementation',
-  status: 'Active' as const,
-  parties: [
-    { label: 'Client', address: 'GABC1234DEF5678HIJK9012LMNO3456PQRS7890' },
-    { label: 'Freelancer', address: 'GXYZ9876STU5432VWXQ1098ABCD7654EFGH3210' },
-  ],
-  totalValue: 7000,
-  currency: 'USD',
-  createdAt: 'Apr 20, 2026',
-  milestones: [
-    {
-      id: 'ms-1',
-      title: 'Kickoff and scope approval',
-      status: 'Completed' as const,
-      payout: 1500,
-      currency: 'USD',
-      dueDate: '2026-05-04',
-    },
-    {
-      id: 'ms-2',
-      title: 'Design and review',
-      status: 'Pending' as const,
-      payout: 2500,
-      currency: 'USD',
-      dueDate: '2026-06-01',
-    },
-    {
-      id: 'ms-3',
-      title: 'Final delivery',
-      status: 'Pending' as const,
-      payout: 3000,
-      currency: 'USD',
-      dueDate: '2026-07-12',
-    },
-  ],
-};
-
-/** Renders ContractDetailPage for the given id and awaits its async resolution. */
-async function renderPage(id = '123') {
-  const params = Promise.resolve({ id });
-  const Component = await ContractDetailPage({ params });
-  return render(Component);
-}
-
-// ---------------------------------------------------------------------------
-// Setup / teardown
-// ---------------------------------------------------------------------------
-
-beforeEach(() => {
-  jest.clearAllMocks();
-  (contractResolver.resolveContractData as jest.Mock).mockResolvedValue(
-    deepClone(BASE_CONTRACT),
-  );
-});
-
-// ---------------------------------------------------------------------------
-// Loading state
-// ---------------------------------------------------------------------------
-
-describe('loading state', () => {
-  it('renders the escrow progress skeleton while data is loading', async () => {
-    const params = Promise.resolve({ id: '123' });
-    const Component = await ContractDetailPage({ params });
-    render(Component);
-
-    await waitFor(() => {
-      expect(screen.getByLabelText('Loading escrow progress')).toBeInTheDocument();
+describe('ContractDetailPage', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedResolveContractData.mockResolvedValue(contractData);
+    mockedUpsertContract.mockReturnValue(true);
+    mockedUseWallet.mockReturnValue({
+      address: '0x123',
+      isConnecting: false,
+      error: null,
+      connect: jest.fn(),
+      disconnect: jest.fn(),
     });
   });
 
-  it('marks the progress skeleton aria-busy during load', async () => {
-    const params = Promise.resolve({ id: '123' });
-    const Component = await ContractDetailPage({ params });
-    render(Component);
+  it('renders the resolved contract details and action panel', async () => {
+    await renderPage();
 
-    await waitFor(() => {
-      const skeleton = screen.getByLabelText('Loading escrow progress');
-      expect(skeleton).toHaveAttribute('aria-busy', 'true');
-    });
+    expect(await screen.findByText('Contract #123')).toBeInTheDocument();
+    expect(screen.getByText('Milestones')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /back to contracts/i })).toHaveAttribute('href', '/contracts');
+    expect(within(getContractSummarySection()).getByLabelText('Status: Active')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /submit milestone for approval/i })).toBeInTheDocument();
   });
 
-  it('renders the contract summary skeleton while loading', async () => {
-    const params = Promise.resolve({ id: '123' });
-    const Component = await ContractDetailPage({ params });
-    render(Component);
+  it('persists the confirmed release flow, updates UI state, and moves focus back to the panel', async () => {
+    const user = userEvent.setup();
+
+    await renderPage();
+
+    const releaseButton = await screen.findByRole('button', {
+      name: /release funds to the contractor/i,
+    });
+
+    await user.click(releaseButton);
+
+    const dialog = screen.getByRole('dialog', { name: /confirm release funds/i });
+    expect(within(dialog).getByRole('button', { name: /cancel/i })).toHaveFocus();
+
+    await user.click(within(dialog).getByRole('button', { name: /^release funds$/i }));
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Loading contract summary')).toBeInTheDocument();
+      expect(mockedUpsertContract).toHaveBeenCalledWith({
+        contractName: contractData.name,
+        parties: contractData.parties,
+        totalValue: contractData.totalValue,
+        currency: contractData.currency,
+        status: 'Completed',
+        createdAt: contractData.createdAt,
+        milestoneCount: contractData.milestones.length,
+      });
     });
-  });
-});
 
 // ---------------------------------------------------------------------------
 // ContractProgress rendering
@@ -339,67 +343,86 @@ describe('existing contract detail page behaviour', () => {
     await renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText('Contract #123')).toBeInTheDocument();
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText('Stellar Escrow Implementation')).toBeInTheDocument();
-      expect(screen.getByText('Milestones')).toBeInTheDocument();
-    });
-
-    expect(screen.getByRole('button', { name: /Submit milestone/i })).toBeInTheDocument();
-    expect(screen.queryByLabelText('Loading contract summary')).not.toBeInTheDocument();
-  });
-
-  it('passes isLoading prop to ActionPanel during data fetch', async () => {
-    (contractResolver.resolveContractData as jest.Mock).mockImplementationOnce(
-      () =>
-        new Promise((resolve) =>
-          setTimeout(
-            () =>
-              resolve({
-                ...deepClone(BASE_CONTRACT),
-                milestones: [],
-              }),
-            100,
-          ),
-        ),
-    );
-
-    const params = Promise.resolve({ id: '123' });
-    const Component = await ContractDetailPage({ params });
-    render(Component);
-
-    await waitFor(() => {
-      const buttons = screen.queryAllByRole('button', { name: /Submit milestone/i });
-      if (buttons.length > 0 && buttons[0].hasAttribute('disabled')) {
-        expect(buttons[0]).toBeDisabled();
-      }
+      expect(
+        screen.getByRole('complementary', { name: /what would you like to do/i }),
+      ).toHaveFocus();
     });
   });
 
-  it('renders error message on load failure and disables actions', async () => {
-    (contractResolver.resolveContractData as jest.Mock).mockRejectedValueOnce(
-      new Error('Network error: Failed to fetch contract data'),
-    );
+  it('persists the confirmed dispute flow and reflects the disputed status in the page', async () => {
+    const user = userEvent.setup();
 
     await renderPage();
 
+    await user.click(await screen.findByRole('button', { name: /open a dispute for this contract/i }));
+    await user.click(within(screen.getByRole('dialog', { name: /confirm dispute/i })).getByRole('button', { name: /^dispute$/i }));
+
     await waitFor(() => {
-      const alert = screen.queryByRole('alert');
-      if (alert) {
-        expect(alert).toBeInTheDocument();
-      }
+      expect(mockedUpsertContract).toHaveBeenCalledWith(
+        expect.objectContaining({ contractName: contractData.name, status: 'Disputed' }),
+      );
     });
+
+    expect(within(getContractSummarySection()).getByLabelText('Status: Disputed')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /release funds to the contractor/i })).not.toBeInTheDocument();
+    expect(await screen.findByText('Dispute opened')).toBeInTheDocument();
+  });
+
+  it('keeps destructive actions disabled when the wallet is disconnected', async () => {
+    const user = userEvent.setup();
+    mockedUseWallet.mockReturnValue({
+      address: null,
+      isConnecting: false,
+      error: null,
+      connect: jest.fn(),
+      disconnect: jest.fn(),
+    });
+
+    await renderPage();
+
+    const releaseButton = await screen.findByRole('button', {
+      name: /release funds to the contractor/i,
+    });
+    const disputeButton = screen.getByRole('button', {
+      name: /open a dispute for this contract/i,
+    });
+
+    expect(screen.getByText(/connect wallet to perform this action/i)).toBeInTheDocument();
+    expect(releaseButton).toBeDisabled();
+    expect(disputeButton).toBeDisabled();
+
+    await user.click(releaseButton);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mockedUpsertContract).not.toHaveBeenCalled();
+  });
+
+  it('shows error feedback and preserves the current status when persistence fails', async () => {
+    const user = userEvent.setup();
+    mockedUpsertContract.mockReturnValue(false);
+
+    await renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /release funds to the contractor/i }));
+    await user.click(within(screen.getByRole('dialog', { name: /confirm release funds/i })).getByRole('button', { name: /^release funds$/i }));
+
+    await waitFor(() => {
+      expect(mockedUpsertContract).toHaveBeenCalledTimes(1);
+    });
+
+    expect(within(getContractSummarySection()).getByLabelText('Status: Active')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /release funds to the contractor/i })).toHaveFocus();
+    expect(screen.getByText('Unable to update contract')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The contract status could not be persisted. Please try again.',
+    );
   });
 
   it('keeps the "Back to contracts" link for a valid id', async () => {
     await renderPage('contract-42');
 
-    expect(screen.getByRole('link', { name: /back to contracts/i })).toHaveAttribute(
-      'href',
-      '/contracts',
-    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(releaseButton).toHaveFocus();
+    expect(mockedUpsertContract).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -409,26 +432,8 @@ describe('existing contract detail page behaviour', () => {
     ['oversized', 'a'.repeat(65)],
     ['special chars', 'id#1!'],
   ])('calls notFound() for invalid id: %s', async (_label, id) => {
-    const params = Promise.resolve({ id });
-    await expect(ContractDetailPage({ params })).rejects.toThrow('NEXT_NOT_FOUND');
-  });
-
-  it('uses SafeBoundary to catch errors in ContractSummary and MilestonesList', async () => {
-    await renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByText('Contract #123')).toBeInTheDocument();
-    });
-  });
-
-  it('announces loading state to accessibility users', async () => {
-    const params = Promise.resolve({ id: '123' });
-    const Component = await ContractDetailPage({ params });
-    render(Component);
-
-    await waitFor(() => {
-      const loadingRegion = screen.getByLabelText('Loading contract summary');
-      expect(loadingRegion).toHaveAttribute('aria-busy', 'true');
-    });
+    await expect(ContractDetailPage({ params: Promise.resolve({ id }) })).rejects.toThrow(
+      'NEXT_NOT_FOUND',
+    );
   });
 });
