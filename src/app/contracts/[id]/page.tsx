@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import Breadcrumbs from '@/components/Breadcrumbs';
 import ContractSummary from '@/components/ContractSummary';
 import MilestonesList from '@/components/MilestonesList';
 import ActionPanel from '@/components/ActionPanel';
@@ -157,25 +158,14 @@ const ContractDetailPageContent = ({ id }: { id: string }) => {
 
   /**
    * Persists the confirmed dispute action as a disputed contract.
-   *
-   * Receives the validated, trimmed reason string from ActionPanel's inline
-   * form. The reason is passed to the success toast description so it is
-   * surfaced to the user without any raw HTML rendering.
-   *
-   * @param reason - Non-empty trimmed dispute reason (max 500 chars).
    */
-  const handleDispute = useCallback(
-    (reason: string) => {
-      persistContractStatus(
-        'Disputed',
-        'Dispute opened',
-        // reason has already been trimmed and validated by ActionPanel;
-        // it is rendered as text content only — never via dangerouslySetInnerHTML.
-        `The contract was marked as Disputed. Reason: ${reason}`,
-      );
-    },
-    [persistContractStatus],
-  );
+  const handleDispute = useCallback(() => {
+    persistContractStatus(
+      'Disputed',
+      'Dispute opened',
+      'The contract was marked as Disputed and the change was saved.',
+    );
+  }, [persistContractStatus]);
 
   const handleViewSummary = () => {
     // Replace with summary navigation.
@@ -188,7 +178,13 @@ const ContractDetailPageContent = ({ id }: { id: string }) => {
       <div className="mx-auto max-w-screen-2xl space-y-6">
         <div className="flex items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div>
-            <p className="text-sm text-slate-500">Contract details</p>
+            <Breadcrumbs
+              items={[
+                { label: 'Dashboard', href: '/' },
+                { label: 'Contracts', href: '/contracts' },
+                { label: `Contract #${id}` },
+              ]}
+            />
             <h1 className="mt-2 text-3xl font-semibold text-slate-900">Contract #{id}</h1>
           </div>
           <Link
